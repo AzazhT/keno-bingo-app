@@ -4,7 +4,7 @@ const { Server } = require('socket.io');
 const http = require('http');
 const path = require('path');
 
-// የተሰጡዎት የቦት ቶከን እና የቻናል/አስተዳዳሪ መረጃዎች
+// የቦት ቶከን እና የአስተዳዳሪ መለያ
 const TOKEN = '8698997396:AAHbZrYI9p-zJaKCee5d8fUlSuVbizAcOOM';
 const ADMIN_ID = '686733543';
 
@@ -19,7 +19,7 @@ const io = new Server(server, {
 // Static files (Frontend ፋይሎችን ከ public ማህደር ለማንበብ)
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 🔴 ይህንን አዲስ መስመር ይጨምሩ (Cannot GET / የሚለውን ስህተት ለማስተካከል)
+// ዋናው ሊንክ ሲከፈት የመግቢያ ገጹን (index.html) እንዲያሳይ ማድረግ
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -53,8 +53,8 @@ bot.onText(/\/start/, (msg) => {
     reply_markup: {
       inline_keyboard: [
         [
-          { text: "🎮 ኬኖ ጨዋታ (Play Keno)", web_app: { url: "https://የእርስዎ-ሰርቨር-ሊንክ.onrender.com/index.html" } },
-          { text: "🎯 ቢንጎ ጨዋታ (Play Bingo)", web_app: { url: "https://የእርስዎ-ሰርቨር-ሊንክ.onrender.com/bingo.html" } }
+          { text: "🎮 ኬኖ ጨዋታ (Play Keno)", web_app: { url: "https://keno-bingo-app-vj8u.onrender.com/keno.html" } },
+          { text: "🎯 ቢንጎ ጨዋታ (Play Bingo)", web_app: { url: "https://keno-bingo-app-vj8u.onrender.com/bingo.html" } }
         ],
         [
           { text: "💰 ባላንስ ማረጋገጫ", callback_data: "balance" },
