@@ -19,13 +19,23 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // የውሂብ ማከማቻዎች
 const registeredUsers = {};      // { tgId: { id, name, balance } }
-let bingoTakenNumbers = {};      // { number: tgId } -> ቢንጎ ላይ የተያዙ ቁጥሮች
-let bingoDrawnNumbers = [];      // ቢንጎ ላይ የወጡ ቁጥሮች
-let bingoTimer = 30;             // የቢንጎ 30 ሰከንድ ቆጣሪ
-
-const activeKenoTickets = [];    // የኬኖ ቲኬቶች
-let kenoDrawnNumbers = [];       // የኬኖ የወጡ ቁጥሮች
 let kenoTimer = 60;              // የኬኖ ቆጣሪ
+let activeKenoTickets = [];    // የኬኖ ቲኬቶች
+let kenoDrawnNumbers = [];       // የኬኖ የወጡ ቁጥሮች
+
+// ኬኖ ፔይቴብል (Paytable)
+const PAYTABLE = {
+  1: { 1: 3.5 },
+  2: { 2: 10, 1: 1 },
+  3: { 3: 50, 2: 2 },
+  4: { 4: 100, 3: 5, 2: 1 },
+  5: { 5: 300, 4: 15, 3: 2 },
+  6: { 6: 1000, 5: 50, 4: 5, 3: 1 },
+  7: { 7: 2000, 6: 100, 5: 12, 4: 2 },
+  8: { 8: 5000, 7: 300, 6: 40, 5: 8, 4: 1 },
+  9: { 9: 10000, 8: 1000, 7: 150, 6: 20, 5: 3 },
+  10: { 10: 25000, 9: 2000, 8: 400, 7: 50, 6: 10, 5: 2 }
+};
 
 // --- 1. /start ትዕዛዝ ሲላክ ---
 bot.onText(/\/start/, (msg) => {
@@ -49,7 +59,6 @@ bot.onText(/\/start/, (msg) => {
   bot.sendMessage(chatId, welcomeText, options);
 });
 
-// የቦት አዝራሮች ምላሽ
 bot.on('callback_query', (query) => {
   const chatId = query.message.chat.id;
   const userId = query.from.id;
@@ -65,38 +74,37 @@ bot.on('callback_query', (query) => {
   bot.answerCallbackQuery(query.id);
 });
 
-// --- 2. የቢንጎ 30 ሰከንድ ቆጣሪ ---
-setInterval(() => {
-  bingoTimer--;
-  if (bingoTimer <= 0) {
-    bingoTimer = 30;
-    bingoTakenNumbers = {}; 
-    bingoDrawnNumbers = [];
-    io.emit('bingoGameReset');
-  }
-
-  let nextNum;
-  do {
-    nextNum = Math.floor(Math.random() * 75) + 1;
-  } while (bingoDrawnNumbers.includes(nextNum));
-
-  bingoDrawnNumbers.push(nextNum);
-  io.emit('bingoNewNumberCall', { number: nextNum, drawnList: bingoDrawnNumbers, timer: bingoTimer });
-}, 30000);
-
-// --- 3. የኬኖ 60 ሰከንድ ቆጣሪ ---
+// --- 2. የኬኖ 60 ሰከንድ ቆጣሪ እና ቁጥር ማውጣት ---
 setInterval(() => {
   kenoTimer--;
   if (kenoTimer <= 0) {
     kenoTimer = 60;
     kenoDrawnNumbers = [];
-    activeKenoTickets.length = 0;
-    io.emit('kenoGameReset');
+    activeKenoTickets = [];
+    io.emit('gameReset');
+  } else {
+    // በየሰከንዱ አዳዲስ ቁጥሮች እያወጣን እንልካለን (እስከ 20 ቁጥሮች)
+    if (kenoDrawnNumbers.length < 20) {
+      let rand;
+      do {
+        rand = Math.floor(Math.random() * 80) + 1;
+      } while (kenoDrawnNumbers.includes(rand));
+      
+      kenoDrawnNumbers.push(rand);
+
+      // የቲኬቶችን ሂት (Hits) ማስተካከል
+      activeKenoTickets.forEach(t => {
+        t.hitsCount = t.numbers.filter(n => kenoDrawnNumbers.includes(n)).length;
+      });
+
+      io.emit('newDrawnNumber', { number: rand, drawnList: kenoDrawnNumbers });
+      io.emit('updateActiveTickets', activeKenoTickets);
+    }
   }
-  io.emit('kenoTimerUpdate', kenoTimer);
+  io.emit('timerUpdate', kenoTimer);
 }, 1000);
 
-// --- 4. Socket.io ግንኙነት ---
+// --- 3. Socket.io ግንኙነት ---
 io.on('connection', (socket) => {
   console.log('ተጫዋች ተገናኝቷል:', socket.id);
 
@@ -108,44 +116,61 @@ io.on('connection', (socket) => {
       registeredUsers[tgId] = {
         id: tgId,
         name: userData.first_name || "ተጫዋች",
-        balance: 100.00 // የመጀመሪያ ቦነስ
+        balance: 500.00 // የመጀመሪያ ቦነስ
       };
     }
 
     socket.emit('userData', {
       user: registeredUsers[tgId],
-      bingoTakenNumbers,
-      bingoDrawnNumbers,
-      kenoDrawnNumbers,
-      activeKenoTickets
+      drawnNumbers: kenoDrawnNumbers,
+      activeTickets: activeKenoTickets,
+      totalPlayersCount: 4325
     });
-  });
-
-  // ቢንጎ ላይ ቁጥር ሲይዙ (ለምሳሌ 66) ለሌሎች ማሳየት
-  socket.on('selectBingoNumber', (data) => {
-    const { tgId, number } = data;
-    const user = registeredUsers[String(tgId)];
-    if (!user) return socket.emit('errorMsg', 'መጀመሪያ ይመዝገቡ!');
-
-    if (bingoTakenNumbers[number]) {
-      return socket.emit('errorMsg', 'ይህ ቁጥር ቀድሞ ተይዟል!');
-    }
-
-    bingoTakenNumbers[number] = String(tgId);
-    io.emit('bingoNumberTaken', { number, tgId: String(tgId), userName: user.name, takenNumbersMap: bingoTakenNumbers });
   });
 
   // ኬኖ ቲኬት መግዛት
   socket.on('buyTicket', (data) => {
     const user = registeredUsers[String(data.userId)];
-    if (!user || user.balance < data.bet) return socket.emit('errorMsg', 'ባላንስ በቂ አይደለም!');
+    if (!user) return socket.emit('errorMsg', 'መጀመሪያ ይመዝገቡ!');
+    if (user.balance < data.bet) return socket.emit('errorMsg', 'ባላንስ በቂ አይደለም!');
 
     user.balance -= data.bet;
     socket.emit('balanceUpdated', user.balance);
 
-    activeKenoTickets.push({ userId: user.id, userName: user.name, numbers: data.numbers, bet: data.bet, maxWin: data.maxWin, hitsCount: 0 });
+    const newTicket = {
+      userId: user.id,
+      userName: user.name,
+      numbers: data.numbers,
+      bet: data.bet,
+      maxWin: data.maxWin,
+      hitsCount: 0
+    };
+
+    activeKenoTickets.push(newTicket);
     socket.emit('ticketBoughtSuccess');
-    io.emit('updateActiveKenoTickets', activeKenoTickets);
+    io.emit('updateActiveTickets', activeKenoTickets);
+  });
+
+  // ዲፖዚት ማረጋገጫ
+  socket.on('verifyAndDeposit', (data) => {
+    const user = registeredUsers[String(data.userId)];
+    if (user) {
+      user.balance += parseFloat(data.amount || 0);
+      socket.emit('balanceUpdated', user.balance);
+      socket.emit('infoMsg', 'ገንዘብዎ ወደ አካውንትዎ ገብቷል!');
+    }
+  });
+
+  // ወጪ ጥያቄ
+  socket.on('requestWithdraw', (data) => {
+    const user = registeredUsers[String(data.userId)];
+    if (user && user.balance >= data.amount) {
+      user.balance -= data.amount;
+      socket.emit('balanceUpdated', user.balance);
+      socket.emit('infoMsg', 'የወጪ ጥያቄዎ ተልኳል!');
+    } else {
+      socket.emit('errorMsg', 'በቂ ባላንስ የለዎትም!');
+    }
   });
 });
 
