@@ -4,8 +4,10 @@ const { Server } = require('socket.io');
 const http = require('http');
 const path = require('path');
 
-// የቦት ቶከንዎን እዚህ ያስገቡ
-const TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN';
+// የተሰጡዎት የቦት ቶከን እና የቻናል/አስተዳዳሪ መረጃዎች
+const TOKEN = '8698997396:AAHbZrYI9p-zJaKCee5d8fUlSuVbizAcOOM';
+const ADMIN_ID = '686733543';
+
 const bot = new TelegramBot(TOKEN, { polling: true });
 
 const app = express();
@@ -46,7 +48,7 @@ bot.onText(/\/start/, (msg) => {
     reply_markup: {
       inline_keyboard: [
         [
-          { text: "🎮 ኬኖ ጨዋታ (Play Keno)", web_app: { url: "https://የእርስዎ-ሰርቨር-ሊንክ.onrender.com/keno.html" } },
+          { text: "🎮 ኬኖ ጨዋታ (Play Keno)", web_app: { url: "https://የእርስዎ-ሰርቨር-ሊንክ.onrender.com/index.html" } },
           { text: "🎯 ቢንጎ ጨዋታ (Play Bingo)", web_app: { url: "https://የእርስዎ-ሰርቨር-ሊንክ.onrender.com/bingo.html" } }
         ],
         [
@@ -83,7 +85,6 @@ setInterval(() => {
     activeKenoTickets = [];
     io.emit('gameReset');
   } else {
-    // በየሰከንዱ አዳዲስ ቁጥሮች እያወጣን እንልካለን (እስከ 20 ቁጥሮች)
     if (kenoDrawnNumbers.length < 20) {
       let rand;
       do {
@@ -92,7 +93,6 @@ setInterval(() => {
       
       kenoDrawnNumbers.push(rand);
 
-      // የቲኬቶችን ሂት (Hits) ማስተካከል
       activeKenoTickets.forEach(t => {
         t.hitsCount = t.numbers.filter(n => kenoDrawnNumbers.includes(n)).length;
       });
@@ -128,7 +128,6 @@ io.on('connection', (socket) => {
     });
   });
 
-  // ኬኖ ቲኬት መግዛት
   socket.on('buyTicket', (data) => {
     const user = registeredUsers[String(data.userId)];
     if (!user) return socket.emit('errorMsg', 'መጀመሪያ ይመዝገቡ!');
@@ -151,23 +150,26 @@ io.on('connection', (socket) => {
     io.emit('updateActiveTickets', activeKenoTickets);
   });
 
-  // ዲፖዚት ማረጋገጫ
   socket.on('verifyAndDeposit', (data) => {
     const user = registeredUsers[String(data.userId)];
     if (user) {
       user.balance += parseFloat(data.amount || 0);
       socket.emit('balanceUpdated', user.balance);
       socket.emit('infoMsg', 'ገንዘብዎ ወደ አካውንትዎ ገብቷል!');
+      
+      // ለፖስተር/አስተዳዳሪ ማሳወቂያ መላክ ከፈለጉ
+      bot.sendMessage(ADMIN_ID, `📥 አዲስ የዲፖዚት ጥያቄ!\nተጠቃሚ: ${user.name}\nመጠን: ${data.amount} ETB\nSMS: ${data.smsText}`);
     }
   });
 
-  // ወጪ ጥያቄ
   socket.on('requestWithdraw', (data) => {
     const user = registeredUsers[String(data.userId)];
     if (user && user.balance >= data.amount) {
       user.balance -= data.amount;
       socket.emit('balanceUpdated', user.balance);
       socket.emit('infoMsg', 'የወጪ ጥያቄዎ ተልኳል!');
+      
+      bot.sendMessage(ADMIN_ID, `📤 አዲስ የወጪ ጥያቄ!\nተጠቃሚ: ${user.name}\nመጠን: ${data.amount} ETB`);
     } else {
       socket.emit('errorMsg', 'በቂ ባላንስ የለዎትም!');
     }
