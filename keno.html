@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="am">
+<head>
+    <meta charset="UTF-8">
+    <title>Keno Game</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; background: #eef2f3; padding: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Keno Game</h1>
+    <h3 id="kenoBalance">ባላንስ: 0.00 ETB</h3>
+    <p>ቆጣሪ: <span id="kenoTimer">60</span> ሰኮንድ</p>
+
+    <script>
+        const socket = io();
+        let currentUser = { id: "12345", first_name: "ተጠቃሚ" };
+
+        if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe.user) {
+            currentUser = window.Telegram.WebApp.initDataUnsafe.user;
+        }
+
+        socket.emit('registerUser', currentUser);
+
+        socket.on('userData', (data) => {
+            document.getElementById('kenoBalance').innerText = `ባላንስ: ${data.user.balance} ETB`;
+        });
+
+        socket.on('kenoTimerUpdate', (t) => {
+            document.getElementById('kenoTimer').innerText = t;
+        });
+    </script>
+</body>
+</html>
