@@ -19,6 +19,11 @@ const io = new Server(server, {
 // Static files (Frontend ፋይሎችን ከ public ማህደር ለማንበብ)
 app.use(express.static(path.join(__dirname, 'public')));
 
+// 🔴 ይህንን አዲስ መስመር ይጨምሩ (Cannot GET / የሚለውን ስህተት ለማስተካከል)
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 // የውሂብ ማከማቻዎች
 const registeredUsers = {};      // { tgId: { id, name, balance } }
 let kenoTimer = 60;              // የኬኖ ቆጣሪ
@@ -116,7 +121,7 @@ io.on('connection', (socket) => {
       registeredUsers[tgId] = {
         id: tgId,
         name: userData.first_name || "ተጫዋች",
-        balance: 500.00 // የመጀመሪያ ቦነስ
+        balance: 500.00
       };
     }
 
@@ -156,8 +161,6 @@ io.on('connection', (socket) => {
       user.balance += parseFloat(data.amount || 0);
       socket.emit('balanceUpdated', user.balance);
       socket.emit('infoMsg', 'ገንዘብዎ ወደ አካውንትዎ ገብቷል!');
-      
-      // ለፖስተር/አስተዳዳሪ ማሳወቂያ መላክ ከፈለጉ
       bot.sendMessage(ADMIN_ID, `📥 አዲስ የዲፖዚት ጥያቄ!\nተጠቃሚ: ${user.name}\nመጠን: ${data.amount} ETB\nSMS: ${data.smsText}`);
     }
   });
@@ -168,7 +171,6 @@ io.on('connection', (socket) => {
       user.balance -= data.amount;
       socket.emit('balanceUpdated', user.balance);
       socket.emit('infoMsg', 'የወጪ ጥያቄዎ ተልኳል!');
-      
       bot.sendMessage(ADMIN_ID, `📤 አዲስ የወጪ ጥያቄ!\nተጠቃሚ: ${user.name}\nመጠን: ${data.amount} ETB`);
     } else {
       socket.emit('errorMsg', 'በቂ ባላንስ የለዎትም!');
