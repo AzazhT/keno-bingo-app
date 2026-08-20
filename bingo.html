@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="am">
+<head>
+    <meta charset="UTF-8">
+    <title>Bingo Game</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; background: #f4f4f4; padding: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(5, 60px); gap: 10px; justify-content: center; margin-top: 20px; }
+        .cell { width: 60px; height: 60px; background: white; border: 2px solid #ccc; font-size: 18px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .taken { background: #ff4d4d !important; color: white; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <h1>Bingo Game (ቆጣሪ: <span id="timer">30</span> ሰኮንድ)</h1>
+    <h3 id="balance">ባላንስ: 0.00 ETB</h3>
+    <div class="grid" id="bingoGrid"></div>
+
+    <script>
+        const socket = io();
+        let currentUser = { id: "12345", first_name: "ተጠቃሚ" }; // ከቴሌግራም ዌብአፕ ዳታ ይወሰዳል
+
+        if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe.user) {
+            currentUser = window.Telegram.WebApp.initDataUnsafe.user;
+        }
+
+        socket.emit('registerUser', currentUser);
+
+        socket.on('userData', (data) => {
+            document.getElementById('balance').innerText = `ባላንስ: ${data.user.balance} ETB`;
+            buildBoard(data.bingoTakenNumbers);
+        });
+
+        function buildBoard(takenMap) {
+            const grid = document.getElementById('bingoGrid');
+            grid.innerHTML = '';
+            for (let i = 1; i <= 75; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.innerText = i;
+                cell.id = `cell-${i}`;
+                
+                if (takenMap && takenMap[i]) {
+                    cell.classList.add('taken');
+                }
+
+                cell.onclick = () => {
+                    if (!cell.classList.contains('taken')) {
+                        socket.emit('selectBingoNumber', { tgId: currentUser.id, number: i });
+                    }
+                };
+                grid.appendChild(cell);
+            }
+        }
+
+        socket.on('bingoNumberTaken', (data) => {
+            const cell = document.getElementById(`cell-${data.number}`);
+            if (cell) {
+                cell.classList.add('taken');
+            }
+        });
+
+        socket.on('bingoTimerUpdate', (t) => {
+            document.getElementById('timer').innerText = t;
+        });
+
+        socket.on('errorMsg', (msg) => { alert(msg); });
+    </script>
+</body>
+</html>
